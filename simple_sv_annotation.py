@@ -207,22 +207,7 @@ def annotate_exon_loss(record, exon_losses, exon_nums):
             else:
                 deleted_exons = "Exon"+str(min(exons))+"-"+str(max(exons))+"del"
         else:
-            p = 0
-            deleted_exons = ''
-            for i in sorted(exons):
-                if p == 0:
-                    deleted_exons = 'Exon'+str(i)
-                elif i-1 == p:
-                    if deleted_exons[-1] != '-':
-                        deleted_exons += '-'
-                else:
-                    if deleted_exons[-1] == '-':
-                        deleted_exons += str(p)
-                    deleted_exons += ','+str(i)
-                p = i
-            if str(p) != deleted_exons[-len(str(p)):]:
-                deleted_exons += str(p)
-            deleted_exons += 'del'
+            deleted_exons = "Exon"+str(min(exons))+"-"+str(max(exons))+"del"
         try:
             record.INFO['SIMPLE_ANN'].append("DEL|EXON_DEL|%s|%s|%s" % (gene,transcript,deleted_exons))
         except KeyError:
