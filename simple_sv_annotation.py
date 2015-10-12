@@ -16,11 +16,12 @@ Author:  David Jenkins (david.jenkins1@astrazeneca.com/dfj@bu.edu)
 See the provided README.md file for more information
 """
 
-import argparse
-import os
-import vcf
-import re
-import tempfile
+
+# no annotation for within-exon deletions (like frameshifts and in-frame deletions) but only for when more than a whole exon is deleted
+# in-frame deletions and frameshifts should be called by variant callers instead?
+# nicely annotates fusions (won't annotate if a gene is fused to an intergenic regions - I guess that's OK) and keeps the other structural variants fairly intact
+
+import argparse, os, vcf, re, sys
 
 def main(vcf_in, outfile, remove_ann, exon_nums):
     """Adds additional header information, opens the infile for reading, opens
@@ -28,9 +29,10 @@ def main(vcf_in, outfile, remove_ann, exon_nums):
     records that are candidates for adding the simple annotation
     """
     bp_dict = {}
-    temp_vcf_file = alter_header(vcf_in)
     vcf_reader = vcf.Reader(filename=vcf_in)
-    vcf_writer = vcf.Writer(open(outfile, 'w'), vcf.Reader(filename=temp_vcf_file.name))
+    # add a new info field into the header of the output file
+    vcf_reader.infos['SIMPLE_ANN'] = vcf.parser._Info(id="SIMPLE_ANN", num=".", type="String", desc="Simplified human readable structural variant annotation: 'SVTYPE | ANNOTATION | GENE(s) | TRANSCRIPT | DETAIL'", source=None, version=None)
+    vcf_writer = vcf.Writer(open(outfile, 'w'), vcf_reader) if outfile !="-" else vcf.Writer(sys.stdout, vcf_reader)
     for record in vcf_reader:
         if record.INFO['SVTYPE'] == "BND":
             if record.INFO['MATEID'][0] not in bp_dict:
@@ -45,27 +47,7 @@ def main(vcf_in, outfile, remove_ann, exon_nums):
                 del bp_dict[record.INFO['MATEID'][0]]
         else:
             vcf_writer.write_record(simplify_ann(record, remove_ann, exon_nums))
-
-def alter_header(vcf_in):
-    """Add a description for the SIMPL_ANN field to the vcf header
-
-    There isn't an easy way to do this through the PyVCF module so I'm creating
-    a temp file with the header, appending the additional INFO field, and
-    returning the temporary file
-    """
-    simple_ann = "##INFO=<ID=SIMPLE_ANN,Number=.,Type=String,Description=\"Simplified human readable structural variant annotation: 'SVTYPE | ANNOTATION | GENE(s) | TRANSCRIPT | DETAIL'\">"
-    tmp_file = tempfile.NamedTemporaryFile(dir='/tmp', suffix='.vcf', bufsize=0)
-    f = open(vcf_in)
-    for line in f:
-        if line[0:6] == "#CHROM":
-            tmp_file.write(simple_ann+"\n")
-            tmp_file.write(line)
-        elif line[0] == "#":
-            tmp_file.write(line)
-        else:
-            break
-    f.close()
-    return(tmp_file)
+    vcf_writer.close()
 
 def make_gene_list(record):
     """For any annotation that isn't a intergenic region, create a list of
@@ -258,14 +240,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description = "Simplify SV annotations from snpEff to highlight exon impact. Requires the pyvcf module.")
     parser.add_argument('vcf', help='VCF file with snpEff annotations')
-    parser.add_argument('--output', '-o', help='Output file name, must not exist [<invcf>.simpleann.vcf]', required=False)
+    parser.add_argument('--output', '-o', help='Output file name (must not exist). Does not support bgzipped output. Use "-" for stdout. [<invcf>.simpleann.vcf]', required=False)
     parser.add_argument('--exonNums', '-e', help='List of custom exon numbers. A transcript listed in this file will be annotated with the numbers found in this file, not the numbers found in the snpEff result')
     parser.add_argument('-r', help="Instead of creating a SIMPLE_ANN field, replace the ANN field with a simplified version that will retain the same inforamtion in the same fields", action='store_true', default=False)
     args = parser.parse_args()
     if args.output:
         outfile = args.output
     else:
-        outfile = os.path.splitext(args.vcf)[0] + ".simpleann" + os.path.splitext(args.vcf)[1]
+        outfile = args.vcf.replace("vcf.gz","vcf").replace(".vcf", ".simpleann.vcf")
     if os.path.exists(outfile):
         raise IOError("Output file %s exists" % outfile)
     exonNumDict = {} 
