@@ -13,13 +13,15 @@ Usage:   simple_sv_annotation.py [OPTIONS]
 
 Author:  David Jenkins (david.jenkins1@astrazeneca.com/dfj@bu.edu)
 
+Notes:
+    - No simplified annotation for within-exon deletions (frameshifts, in-frame dels) as not classified as SVs
+    - Annotates fusions that are gene1-gene2 or gene1-intergenic. Soft filters gene-same gene fusions (likely noise)
+    - Soft filters intergenic events that are not involved with genes directly
+    - Output is not properly chromosome sorted as fusion events are collected together
+
 See the provided README.md file for more information
 """
 
-
-# no annotation for within-exon deletions (like frameshifts and in-frame deletions) but only for when more than a whole exon is deleted
-# in-frame deletions and frameshifts should be called by variant callers instead?
-# nicely annotates fusions (won't annotate if a gene is fused to an intergenic regions - I guess that's OK) and keeps the other structural variants fairly intact
 
 import argparse, os, vcf, re, sys
 
@@ -32,6 +34,7 @@ def main(vcf_in, outfile, remove_ann, exon_nums):
     vcf_reader = vcf.Reader(filename=vcf_in)
     # add a new info field into the header of the output file
     vcf_reader.infos['SIMPLE_ANN'] = vcf.parser._Info(id="SIMPLE_ANN", num=".", type="String", desc="Simplified human readable structural variant annotation: 'SVTYPE | ANNOTATION | GENE(s) | TRANSCRIPT | DETAIL'", source=None, version=None)
+    vcf_reader.filters["REJECT"] = vcf.parser._Filter(id="REJECT", desc="Rejected due various criteria (e.g. gene-same gene fusion, intergenic deletion)")
     vcf_writer = vcf.Writer(open(outfile, 'w'), vcf_reader) if outfile !="-" else vcf.Writer(sys.stdout, vcf_reader)
     for record in vcf_reader:
         if record.INFO['SVTYPE'] == "BND":
@@ -50,7 +53,7 @@ def main(vcf_in, outfile, remove_ann, exon_nums):
     vcf_writer.close()
 
 def make_gene_list(record):
-    """For any annotation that isn't a intergenic region, create a list of
+    """For any annotation that isn't in an intergenic region, create a list of
     genes used to create the fusion record
     """
     genes = []
@@ -69,11 +72,18 @@ def simplify_bp(record1, record2, remove_ann):
     annotated = True
     genes1 = make_gene_list(record1)
     genes2 = make_gene_list(record2)
-    #if either record is annotated with intergenic region, don't call it a gene
-    #fusion
-    if len(genes1) > 0 and len(genes2) > 0:
+    #if either record is annotated with intergenic region, annotate with "INTERGENIC"
+    #if both records point to the same gene, soft filter
+    is_within_gene_or_intergenic_fusion = True # will be set to True if there is one fusion with two genes involved
+    if len(genes1) + len(genes2) > 0:
+        if len(genes1) == 0:
+            genes1.append("INTERGENIC")
+        if len(genes2) == 0:
+            genes2.append("INTERGENIC")
         for i in genes1:
             for j in genes2:
+                if i != j:
+                    is_within_gene_or_intergenic_fusion = False
                 try:
                     record1.INFO['SIMPLE_ANN'].append("BND|FUSION|%s-%s||" % (i,j))
                 except KeyError:
@@ -85,6 +95,9 @@ def simplify_bp(record1, record2, remove_ann):
         if remove_ann:
             replace_ann_field(record1)
             replace_ann_field(record2)
+    if is_within_gene_or_intergenic_fusion:
+        record1.FILTER.append("REJECT")
+        record2.FILTER.append("REJECT")
     return record1, record2
 
 def switch_to_ann(annotation):
@@ -198,7 +211,7 @@ def annotate_exon_loss(record, exon_losses, exon_nums):
 def annotate_intron_var(record, ann_a):
     """Create a simplified version of the annotation field for an intronic var
 
-    Regardless of sv type, the simple annotation for an intergenic variant
+    Regardless of sv type, the simple annotation for an intronic variant
     looks like: SIMPLE_ANN=INV|INTRONIC|ERBB4|NM_005235.2|
     """
     try:
