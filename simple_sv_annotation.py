@@ -117,11 +117,18 @@ def simplify_ann(record, remove_ann, exon_nums):
     """Find any annotations that can be simplified and call the method
     to annotate it.
     """
+    
+    # TO-DO: downstream_gene_variant, upstream_gene_variant, non_coding_exon_variant, 3_prime_UTR_variant, 5_prime_UTR_variant
+    # CNV and INS
     exon_losses = {}
     annotated = False
     for i in record.INFO['ANN']:
         ann_a = i.split('|')
-        if ann_a[1] == "intron_variant":
+        if ann_a[1] in ["intron_variant", "downstream_gene_variant", 
+                "upstream_gene_variant", "non_coding_exon_variant", 
+                "3_prime_UTR_variant", "5_prime_UTR_variant",
+                "splice_acceptor_variant","splice_donor_variant",
+                "splice_region_variant"]:
             annotate_intron_var(record, ann_a)
             annotated = True
         elif ann_a[1] == "intergenic_region":
@@ -214,10 +221,12 @@ def annotate_intron_var(record, ann_a):
     Regardless of sv type, the simple annotation for an intronic variant
     looks like: SIMPLE_ANN=INV|INTRONIC|ERBB4|NM_005235.2|
     """
+    simple_ann = "%s|%s|%s|%s|" % (record.INFO['SVTYPE'], ann_a[1].replace("intron_variant","INTRONIC").upper(), ann_a[3], ann_a[6])
     try:
-        record.INFO['SIMPLE_ANN'].append("%s|INTRONIC|%s|%s|" % (record.INFO['SVTYPE'],ann_a[3],ann_a[6]))
+        if simple_ann not in record.INFO['SIMPLE_ANN']: # avoid duplicate entries that bloat the output
+            record.INFO['SIMPLE_ANN'].append(simple_ann)
     except KeyError:
-        record.INFO['SIMPLE_ANN'] = ["%s|INTRONIC|%s|%s|" % (record.INFO['SVTYPE'],ann_a[3],ann_a[6])]
+        record.INFO['SIMPLE_ANN'] = [simple_ann]
 
 def annotate_intergenic_var(record, ann_a):
     """Create a simplified version of the annotation field for an intergenic var
@@ -225,10 +234,12 @@ def annotate_intergenic_var(record, ann_a):
     Regardless of sv type, the simple annotation for an intergenic variant
     looks like: SIMPLE_ANN=INV|INTERGENIC|LETM2-FGFR1||
     """
+    simple_ann = "%s|INTERGENIC|%s||" % (record.INFO['SVTYPE'],ann_a[4])
     try:
-        record.INFO['SIMPLE_ANN'].append("%s|INTERGENIC|%s||" % (record.INFO['SVTYPE'],ann_a[4]))
+        if simple_ann not in record.INFO['SIMPLE_ANN']: # avoid duplicate entries that bloat the output
+            record.INFO['SIMPLE_ANN'].append(simple_ann)
     except KeyError:
-        record.INFO['SIMPLE_ANN'] = ["%s|INTERGENIC|%s||" % (record.INFO['SVTYPE'],ann_a[4])]
+        record.INFO['SIMPLE_ANN'] = [simple_ann]
 
 def create_exon_numDict(infile):
     """Create a dictionary of exon numbers based on an input file of alternate
