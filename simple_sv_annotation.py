@@ -122,29 +122,31 @@ def simplify_ann(record, remove_ann, exon_nums):
     # CNV and INS
     exon_losses = {}
     annotated = False
+    is_intergenic = True
     for i in record.INFO['ANN']:
         ann_a = i.split('|')
-        if ann_a[1] in ["intron_variant", "downstream_gene_variant", 
-                "upstream_gene_variant", "non_coding_exon_variant", 
-                "3_prime_UTR_variant", "5_prime_UTR_variant",
-                "splice_acceptor_variant","splice_donor_variant",
-                "splice_region_variant"]:
-            annotate_intron_var(record, ann_a)
-            annotated = True
-        elif ann_a[1] == "intergenic_region":
+        p = re.compile('exon_loss_variant')
+        if ann_a[1] == "intergenic_region":
             annotate_intergenic_var(record, ann_a)
             annotated = True
-        p = re.compile('exon_loss_variant')
-        if p.search(i):
+        elif p.search(i):
+            is_intergenic = False
             try:
                 exon_losses[ann_a[6]].append(i)
             except KeyError:
                 exon_losses[ann_a[6]] = [i]
+        else:
+            annotate_other_var(record, ann_a)
+            annotated = True
+            is_intergenic = False
     if len(exon_losses) > 0:
         annotate_exon_loss(record, exon_losses, exon_nums)
         annotated = True
     if remove_ann and annotated:
         replace_ann_field(record)
+    # REJECT purely intergenic events
+    if is_intergenic:
+        record.FILTER.append("REJECT")
     return record
 
 def uniq_list(inlist):
@@ -215,13 +217,13 @@ def annotate_exon_loss(record, exon_losses, exon_nums):
         except KeyError:
             record.INFO['SIMPLE_ANN'] = ["DEL|EXON_DEL|%s|%s|%s" % (gene,transcript,deleted_exons)]
 
-def annotate_intron_var(record, ann_a):
+def annotate_other_var(record, ann_a):
     """Create a simplified version of the annotation field for an intronic var
 
     Regardless of sv type, the simple annotation for an intronic variant
     looks like: SIMPLE_ANN=INV|INTRONIC|ERBB4|NM_005235.2|
     """
-    simple_ann = "%s|%s|%s|%s|" % (record.INFO['SVTYPE'], ann_a[1].replace("intron_variant","INTRONIC").upper(), ann_a[3], ann_a[6])
+    simple_ann = "%s|%s|%s|%s|" % (record.INFO['SVTYPE'], ann_a[1].upper(), ann_a[3], ann_a[6])
     try:
         if simple_ann not in record.INFO['SIMPLE_ANN']: # avoid duplicate entries that bloat the output
             record.INFO['SIMPLE_ANN'].append(simple_ann)
