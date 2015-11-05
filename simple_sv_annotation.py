@@ -37,6 +37,8 @@ def main(vcf_in, outfile, remove_ann, exon_nums):
     vcf_reader.filters["REJECT"] = vcf.parser._Filter(id="REJECT", desc="Rejected due various criteria (e.g. gene-same gene fusion, intergenic deletion)")
     vcf_writer = vcf.Writer(open(outfile, 'w'), vcf_reader) if outfile !="-" else vcf.Writer(sys.stdout, vcf_reader)
     for record in vcf_reader:
+        if record.FILTER is None:
+            record.FILTER = []
         if record.INFO['SVTYPE'] == "BND":
             if record.INFO['MATEID'][0] not in bp_dict:
                 #Store the record in the dict until its pair is found
