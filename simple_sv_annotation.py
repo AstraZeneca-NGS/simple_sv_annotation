@@ -39,17 +39,21 @@ def main(vcf_in, outfile, remove_ann, exon_nums):
     for record in vcf_reader:
         if record.FILTER is None:
             record.FILTER = []
-        if record.INFO['SVTYPE'] == "BND":
-            if record.INFO['MATEID'][0] not in bp_dict:
-                #Store the record in the dict until its pair is found
-                bp_dict[record.ID] = record
-            else:
-                #If the other BND is in the dict, annotate
-                record1, record2 = simplify_bp(record, bp_dict[record.INFO['MATEID'][0]], remove_ann)
-                vcf_writer.write_record(record1)
-                vcf_writer.write_record(record2)
-                #remove used record from the dict
-                del bp_dict[record.INFO['MATEID'][0]]
+        try: # if there is no SVTYPE or MATEID, ignore for now
+            if record.INFO['SVTYPE'] == "BND":
+                if record.INFO['MATEID'][0] not in bp_dict:
+                    #Store the record in the dict until its pair is found
+                    bp_dict[record.ID] = record
+                else:
+                    #If the other BND is in the dict, annotate
+                    record1, record2 = simplify_bp(record, bp_dict[record.INFO['MATEID'][0]], remove_ann)
+                    vcf_writer.write_record(record1)
+                    vcf_writer.write_record(record2)
+                    #remove used record from the dict
+                    del bp_dict[record.INFO['MATEID'][0]]
+        except KeyError:
+            record.FILTER.append("REJECT")
+            vcf_writer.write_record(record)
         else:
             vcf_writer.write_record(simplify_ann(record, remove_ann, exon_nums))
     vcf_writer.close()
