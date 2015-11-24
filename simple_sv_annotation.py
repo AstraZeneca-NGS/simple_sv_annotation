@@ -11,7 +11,7 @@ Output:  vcf file with SV annotation field with simplified annotation
 
 Usage:   simple_sv_annotation.py [OPTIONS]
 
-Author:  David Jenkins (david.jenkins1@astrazeneca.com/dfj@bu.edu)
+Authors:  David Jenkins (david.jenkins1@astrazeneca.com/dfj@bu.edu), Miika Ahdesmaki (miika.ahdesmaki @ astrazeneca.com / live.fi)
 
 Notes:
     - No simplified annotation for within-exon deletions (frameshifts, in-frame dels) as not classified as SVs
@@ -22,10 +22,14 @@ Notes:
 See the provided README.md file for more information
 """
 
-
+from __future__ import print_function
 import argparse, os, vcf, re, sys
+try:
+    import pysam
+except ImportError:
+    pysam = None
 
-def main(vcf_in, outfile, remove_ann, exon_nums):
+def main(vcf_in, outfile, remove_ann, exon_nums, gene_gtf):
     """Adds additional header information, opens the infile for reading, opens
     the outfile for writing, and iterates through the records to identify
     records that are candidates for adding the simple annotation
@@ -34,6 +38,11 @@ def main(vcf_in, outfile, remove_ann, exon_nums):
     vcf_reader = vcf.Reader(filename=vcf_in)
     # add a new info field into the header of the output file
     vcf_reader.infos['SIMPLE_ANN'] = vcf.parser._Info(id="SIMPLE_ANN", num=".", type="String", desc="Simplified human readable structural variant annotation: 'SVTYPE | ANNOTATION | GENE(s) | TRANSCRIPT | DETAIL'", source=None, version=None)
+    if os.path.isfile(gene_gtf) and pysam:
+        gtf_file = pysam.TabixFile(gene_gtf)
+        vcf_reader.infos['END_GENE'] = vcf.parser._Info(id="END_GENE", num=".", type="String", desc="Gene name(s) for END coordinate", source=None, version=None)
+    else:
+        gtf_file = None
     vcf_reader.filters["REJECT"] = vcf.parser._Filter(id="REJECT", desc="Rejected due various criteria (e.g. gene-same gene fusion, intergenic deletion)")
     vcf_writer = vcf.Writer(open(outfile, 'w'), vcf_reader) if outfile !="-" else vcf.Writer(sys.stdout, vcf_reader)
     for record in vcf_reader:
@@ -51,12 +60,33 @@ def main(vcf_in, outfile, remove_ann, exon_nums):
                     vcf_writer.write_record(record2)
                     #remove used record from the dict
                     del bp_dict[record.INFO['MATEID'][0]]
+            else:
+                #first check if 'END' is specified and then annotate it with gene name
+                if 'END' in record.INFO and gtf_file:
+                    record = add_gene_name(record, gtf_file)
+                vcf_writer.write_record(simplify_ann(record, remove_ann, exon_nums))
         except KeyError:
             record.FILTER.append("REJECT")
             vcf_writer.write_record(record)
-        else:
-            vcf_writer.write_record(simplify_ann(record, remove_ann, exon_nums))
     vcf_writer.close()
+
+def add_gene_name(record, gtf_file):
+    # add gene name from 'transcript' entries
+    for gtf in gtf_file.fetch(record.CHROM, record.INFO['END']-1, record.INFO['END']):
+        if isinstance(gtf, basestring): # some versions of pysam just return a string
+            gtfsplit = gtf.strip().split("\t")
+            if gtfsplit[2] != "transcript" or "gene_name" not in gtfsplit[8]:
+                continue # if not transcript
+            match = re.search('(?<={} )[^;]*'.format("gene_name"), gtfsplit[8])
+            gene_name = match.group().strip('"')
+        else:
+            gene_name = gtf.gene_name # pysam other versions?
+        try:
+            if gene_name not in record.INFO['END_GENE']:
+                record.INFO['END_GENE'].append(gene_name)
+        except KeyError:
+            record.INFO['END_GENE'] = [gene_name]
+    return record
 
 def make_gene_list(record):
     """For any annotation that isn't in an intergenic region, create a list of
@@ -275,6 +305,7 @@ if __name__ == "__main__":
     parser.add_argument('--output', '-o', help='Output file name (must not exist). Does not support bgzipped output. Use "-" for stdout. [<invcf>.simpleann.vcf]', required=False)
     parser.add_argument('--exonNums', '-e', help='List of custom exon numbers. A transcript listed in this file will be annotated with the numbers found in this file, not the numbers found in the snpEff result')
     parser.add_argument('-r', help="Instead of creating a SIMPLE_ANN field, replace the ANN field with a simplified version that will retain the same inforamtion in the same fields", action='store_true', default=False)
+    parser.add_argument('--gene_gtf', '-g', help='Bgzipped, tabix indexed gtf file with gene annotation. Used for annotating END coordinate gene when available as SnpEff does not currently annotate it. Only "transcript" entries are used. Gene name must be present in gene_name in the 9th column.', required=False, default=None)
     args = parser.parse_args()
     if args.output:
         outfile = args.output
@@ -285,4 +316,4 @@ if __name__ == "__main__":
     exonNumDict = {} 
     if args.exonNums:
         exonNumDict = create_exon_numDict(args.exonNums) 
-    main(args.vcf, outfile, args.r, exonNumDict)
+    main(args.vcf, outfile, args.r, exonNumDict, args.gene_gtf)
