@@ -117,7 +117,7 @@ def simplify_bp(record1, record2, remove_ann):
     """Adds the fusion annotation to both breakend records for each pair
     of genes found in the larger annotations
 
-    example: BND|FUSION|ALK-EML4||
+    example: BND|FUSION|ALK/EML4||
     """
     annotated = True
     genes1 = make_gene_list(record1)
@@ -135,13 +135,13 @@ def simplify_bp(record1, record2, remove_ann):
                 if i != j:
                     is_within_gene_or_intergenic_fusion = False
                 try:
-                    record1.INFO['SIMPLE_ANN'].append("BND|FUSION|%s-%s||" % (i,j))
+                    record1.INFO['SIMPLE_ANN'].append("BND|FUSION|%s/%s||" % (i,j))
                 except KeyError:
-                    record1.INFO['SIMPLE_ANN'] = ["BND|FUSION|%s-%s||" % (i,j)]
+                    record1.INFO['SIMPLE_ANN'] = ["BND|FUSION|%s/%s||" % (i,j)]
                 try:
-                    record2.INFO['SIMPLE_ANN'].append("BND|FUSION|%s-%s||" % (i,j))
+                    record2.INFO['SIMPLE_ANN'].append("BND|FUSION|%s/%s||" % (i,j))
                 except KeyError:
-                    record2.INFO['SIMPLE_ANN'] = ["BND|FUSION|%s-%s||" % (i,j)]
+                    record2.INFO['SIMPLE_ANN'] = ["BND|FUSION|%s/%s||" % (i,j)]
         if remove_ann:
             replace_ann_field(record1)
             replace_ann_field(record2)
