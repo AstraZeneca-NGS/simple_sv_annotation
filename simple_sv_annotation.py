@@ -215,7 +215,10 @@ def find_deleted_exons(annotations):
         ann_a = i.split('|')
         if gene == '':
             gene = ann_a[3]
-        exons.append(int(ann_a[8].split('/')[0]))
+        try:
+            exons.append(int(ann_a[8].split('/')[0]))
+        except ValueError:
+            pass
     return exons, gene
 
 def find_alt_deleted_exons(record, exon_nums, annotations):
