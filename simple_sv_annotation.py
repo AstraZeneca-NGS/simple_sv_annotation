@@ -14,16 +14,16 @@ Usage:   simple_sv_annotation.py [OPTIONS]
 Authors:  David Jenkins (david.jenkins1@astrazeneca.com/dfj@bu.edu), Miika Ahdesmaki (miika.ahdesmaki @ astrazeneca.com / live.fi)
 
 Notes:
+    - Simplified with SnpEff 4.3 updates that add better annotation for fusion events resulting from all BND/INV/DUP/DEL
     - No simplified annotation for within-exon deletions (frameshifts, in-frame dels) as not classified as SVs
     - Annotates fusions that are gene1-gene2 or gene1-intergenic. Soft filters gene-same gene fusions (likely noise)
     - Soft filters intergenic events that are not involved with genes directly
-    - Output is not properly chromosome sorted as fusion events are collected together
 
 See the provided README.md file for more information
 """
 
 from __future__ import print_function
-import argparse, os, vcf, re, sys
+import argparse, os, vcf, sys
 try:
     import pysam
 except ImportError:
@@ -34,121 +34,24 @@ def main(vcf_in, outfile, remove_ann, exon_nums, args):
     the outfile for writing, and iterates through the records to identify
     records that are candidates for adding the simple annotation
     """
-    bp_dict = {}
+
     vcf_reader = vcf.Reader(filename=vcf_in)
     # add a new info field into the header of the output file
     vcf_reader.infos['SIMPLE_ANN'] = vcf.parser._Info(id="SIMPLE_ANN", num=".", type="String", desc="Simplified human readable structural variant annotation: 'SVTYPE | ANNOTATION | GENE(s) | TRANSCRIPT | DETAIL'", source=None, version=None)
-    # check to see if a bed or gtf file was provided
-    gtf_file, bed_file = None,None
-    if args.gene_gtf and os.path.isfile(args.gene_gtf) and pysam:
-        gtf_file = pysam.TabixFile(args.gene_gtf)
-    elif args.gene_bed and os.path.isfile(args.gene_bed) and pysam:
-        bed_file = pysam.TabixFile(args.gene_bed)
-    if gtf_file or bed_file:
-        vcf_reader.infos['END_GENE'] = vcf.parser._Info(id="END_GENE", num=".", type="String", desc="Gene name(s) for END coordinate", source=None, version=None)
     # add filters
     vcf_reader.filters["REJECT"] = vcf.parser._Filter(id="REJECT", desc="Rejected due various criteria (e.g. gene-same gene fusion, intergenic deletion)")
     vcf_writer = vcf.Writer(open(outfile, 'w'), vcf_reader) if outfile !="-" else vcf.Writer(sys.stdout, vcf_reader)
     for record in vcf_reader:
         if record.FILTER is None:
             record.FILTER = []
-        try: # if there is no SVTYPE or MATEID, ignore for now
-            if record.INFO['SVTYPE'] == "BND":
-                if record.INFO['MATEID'][0] not in bp_dict:
-                    #Store the record in the dict until its pair is found
-                    bp_dict[record.ID] = record
-                else:
-                    #If the other BND is in the dict, annotate
-                    record1, record2 = simplify_bp(record, bp_dict[record.INFO['MATEID'][0]], remove_ann)
-                    vcf_writer.write_record(record1)
-                    vcf_writer.write_record(record2)
-                    #remove used record from the dict
-                    del bp_dict[record.INFO['MATEID'][0]]
-            else:
-                #first check if 'END' is specified and then annotate it with gene name
-                if 'END' in record.INFO and (gtf_file or bed_file):
-                    record = add_gene_name(record, gtf_file, bed_file)
-                vcf_writer.write_record(simplify_ann(record, remove_ann, exon_nums))
-        except KeyError:
+
+        if 'SVTYPE' in record.INFO and 'ANN' in record.INFO:
+            #any(["gene_fusion" in x for x in record.INFO['ANN']])
+            vcf_writer.write_record(simplify_ann(record, remove_ann, exon_nums))
+        else: 
             record.FILTER.append("REJECT")
             vcf_writer.write_record(record)
     vcf_writer.close()
-
-def add_gene_name(record, gtf_file, bed_file):
-    # bed_file and gtf_file are mutually exclusive
-    is_gtf = True if gtf_file else False
-    my_file = gtf_file if gtf_file else bed_file
-    # add gene name from 'transcript' entries
-    for line in my_file.fetch(record.CHROM, record.INFO['END']-1, record.INFO['END']):
-        # for gtf files
-        if is_gtf:
-            if isinstance(line, basestring): # some versions of pysam just return a string
-                linesplit = line.strip().split("\t")
-                if linesplit[2] != "transcript" or "gene_name" not in linesplit[8]:
-                    continue # if not transcript
-                match = re.search('(?<={} )[^;]*'.format("gene_name"), linesplit[8])
-                gene_name = match.group().strip('"')
-            else:
-                gene_name = line.gene_name # pysam other versions?
-        else: # for bed files
-            # assume lines are returned
-            linesplit = line.strip().split("\t")
-            gene_name = linesplit[3]
-        # now do the annotation
-        try:
-            if gene_name not in record.INFO['END_GENE']:
-                record.INFO['END_GENE'].append(gene_name)
-        except KeyError:
-            record.INFO['END_GENE'] = [gene_name]
-    return record
-
-def make_gene_list(record):
-    """For any annotation that isn't in an intergenic region, create a list of
-    genes used to create the fusion record
-    """
-    genes = []
-    for i in record.INFO['ANN']:
-        ann_a = i.split('|')
-        if ann_a[1] != "intergenic_region" and ann_a[3] != '':
-            genes.append(ann_a[3])
-    return uniq_list(genes)
-
-def simplify_bp(record1, record2, remove_ann):
-    """Adds the fusion annotation to both breakend records for each pair
-    of genes found in the larger annotations
-
-    example: BND|FUSION|ALK/EML4||
-    """
-    annotated = True
-    genes1 = make_gene_list(record1)
-    genes2 = make_gene_list(record2)
-    #if either record is annotated with intergenic region, annotate with "INTERGENIC"
-    #if both records point to the same gene, soft filter
-    is_within_gene_or_intergenic_fusion = True # will be set to True if there is one fusion with two genes involved
-    if len(genes1) + len(genes2) > 0:
-        if len(genes1) == 0:
-            genes1.append("INTERGENIC")
-        if len(genes2) == 0:
-            genes2.append("INTERGENIC")
-        for i in genes1:
-            for j in genes2:
-                if i != j:
-                    is_within_gene_or_intergenic_fusion = False
-                try:
-                    record1.INFO['SIMPLE_ANN'].append("BND|FUSION|%s/%s||" % (i,j))
-                except KeyError:
-                    record1.INFO['SIMPLE_ANN'] = ["BND|FUSION|%s/%s||" % (i,j)]
-                try:
-                    record2.INFO['SIMPLE_ANN'].append("BND|FUSION|%s/%s||" % (i,j))
-                except KeyError:
-                    record2.INFO['SIMPLE_ANN'] = ["BND|FUSION|%s/%s||" % (i,j)]
-        if remove_ann:
-            replace_ann_field(record1)
-            replace_ann_field(record2)
-    if is_within_gene_or_intergenic_fusion:
-        record1.FILTER.append("REJECT")
-        record2.FILTER.append("REJECT")
-    return record1, record2
 
 def switch_to_ann(annotation):
     """Switch SIMPLE_ANN to a more ANN like form"""
@@ -167,25 +70,25 @@ def simplify_ann(record, remove_ann, exon_nums):
     """Find any annotations that can be simplified and call the method
     to annotate it.
     """
+    # marching order is: 'exon_loss_variant', fusions, others (reject)
+
+    # to-do: CNV and INS?
     
-    # TO-DO: downstream_gene_variant, upstream_gene_variant, non_coding_exon_variant, 3_prime_UTR_variant, 5_prime_UTR_variant
-    # CNV and INS
     exon_losses = {}
     annotated = False
-    is_intergenic = True
+    is_intergenic = True # is intergenic or otherwise likely rubbish?
     for i in record.INFO['ANN']:
         ann_a = i.split('|')
-        p = re.compile('exon_loss_variant')
-        if ann_a[1] == "intergenic_region":
-            annotate_intergenic_var(record, ann_a)
-            annotated = True
-        elif p.search(i):
+        if "exon_loss_variant" in [ann_a[1]:
             is_intergenic = False
             try:
                 exon_losses[ann_a[6]].append(i)
             except KeyError:
                 exon_losses[ann_a[6]] = [i]
-        else:
+        elif "gene_fusion" in [ann_a[1]: 
+            # This could be 'gene_fusion', 'bidirectional_gene_fusion' but not 'feature_fusion'
+            # 'gene_fusion' could lead to a coding fusion whereas 
+            # 'bidirectional_gene_fusion' is likely non-coding (opposing frames, _if_ inference correct)
             annotate_other_var(record, ann_a)
             annotated = True
             is_intergenic = False
@@ -194,7 +97,7 @@ def simplify_ann(record, remove_ann, exon_nums):
         annotated = True
     if remove_ann and annotated:
         replace_ann_field(record)
-    # REJECT purely intergenic events
+    # REJECT purely intergenic events and other nuisance variants
     if is_intergenic:
         record.FILTER.append("REJECT")
     return record
@@ -271,7 +174,7 @@ def annotate_exon_loss(record, exon_losses, exon_nums):
             record.INFO['SIMPLE_ANN'] = ["DEL|EXON_DEL|%s|%s|%s" % (gene,transcript,deleted_exons)]
 
 def annotate_other_var(record, ann_a):
-    """Create a simplified version of the annotation field for an intronic var
+    """Create a simplified version of the annotation field for non-whole exon loss events
 
     Regardless of sv type, the simple annotation for an intronic variant
     looks like: SIMPLE_ANN=INV|INTRONIC|ERBB4|NM_005235.2|
@@ -283,6 +186,7 @@ def annotate_other_var(record, ann_a):
     except KeyError:
         record.INFO['SIMPLE_ANN'] = [simple_ann]
 
+# UNUSED FUNCTION FOR NOW
 def annotate_intergenic_var(record, ann_a):
     """Create a simplified version of the annotation field for an intergenic var
 
@@ -324,8 +228,6 @@ if __name__ == "__main__":
     parser.add_argument('-r', help="Instead of creating a SIMPLE_ANN field, replace the ANN field with a simplified version that will retain the same inforamtion in the same fields", action='store_true', default=False)
 
     parser_excl = parser.add_mutually_exclusive_group(required=False)
-    parser_excl.add_argument('--gene_gtf', '-g', help='Bgzipped, tabix indexed gtf file with gene annotation. Used for annotating END coordinate gene when available as SnpEff does not currently annotate it. Only "transcript" entries are used. Gene name must be present in gene_name in the 9th column.', required=False, default=None)
-    parser_excl.add_argument('--gene_bed', '-b', help='Bgzipped, tabix indexed bed file with gene annotation in the fourth column. Used for annotating END coordinate gene when available as SnpEff does not currently annotate it.', required=False, default=None)
     args = parser.parse_args() 
     if args.output:
         outfile = args.output
