@@ -16,7 +16,7 @@ A tool for simplifying snpEff annotations
 
 1. python 2.7
 2. [PyVcf](http://pyvcf.readthedocs.org/en/latest/) python module
-3. [VCF](https://vcftools.github.io/specs.html) file annotated with [snpEff v4.1g+](http://snpeff.sourceforge.net/).
+3. [VCF](https://vcftools.github.io/specs.html) file annotated with [snpEff v4.3+](http://snpeff.sourceforge.net/).
 
 ```simple_sv_annotation.py``` is designed around the new [ANN](http://snpeff.sourceforge.net/VCFannotationformat_v1.0.pdf) annotation field rather than the previous EFF field.
 
@@ -37,7 +37,8 @@ vcf FILE - vcf file annotated with snpEff v4.1g+
 ```
 --output/-o   FILE - Output file name. Default: <invcf>.simpleann.vcf
 --exonNums/-e FILE - List of custom exon numbers (see Alternate Exon Numbers)
--r                 - Replace the ANN field instead of adding SIMPLE ANN (see Example Output)
+--gene_list/-g FILE - List of genes to prioritise on
+--known_fusion_pairs/-k FILE - Comma delimited file with a gene pair on each row representing known fusion pairs
 ```
 
 ## Alternate Exon Numbers
@@ -99,7 +100,7 @@ Jenkins, [AZ Email](mailto:david.jenkins1@astrazeneca.com) or [BU Email](mailto:
 1. Intergenic SVs
 2. Intronic SVs
 3. Whole Exon Loss SVs
-4. Gene Fusions Annotated as breakends
+4. Gene Fusions (can result from BND/DEL/INV/DUP)
 
 Examples of the simplified SV annotations are below.
 
@@ -148,21 +149,4 @@ chr17  41258467  del_5  ATATACCTTTTGGTTATATCATTCTTACATAAAGGACACTGTGAAGGCCCTTTCTT
 after:
 
 chr17  41258467  del_5  ATATACCTTTTGGTTATATCATTCTTACATAAAGGACACTGTGAAGGCCCTTTCTTCTGGTTGAGAAGTTTCAGCATGCAAAATCTATA  A  .  .  END=41258555;SVTYPE=DEL;SVLEN=-88;UPSTREAM_PAIR_COUNT=0;DOWNSTREAM_PAIR_COUNT=0;PAIR_COUNT=0;ANN=A|exon_loss_variant&splice_acceptor_variant&splice_donor_variant&splice_region_variant&splice_region_variant&splice_region_variant&splice_region_variant&intron_variant&intron_variant|HIGH|BRCA1|BRCA1|transcript|NM_007294.3|Coding|4/23|c.135-5_212+5delTATAGATTTTGCATGCTGAAACTTCTCAACCAGAAGAAAGGGCCTTCACAGTGTCCTTTATGTAAGAATGATATAACCAAAAGGTATA||||||;SIMPLE_ANN=DEL|EXON_DEL|BRCA1|NM_007294.3|Exon5del
-```
-
-#### 2. Replace ANN field 
-
-Optionally, you may choose to replace the 16 column ANN field with the simplified
-annotation information. This will roughly preserve the type of information
-expected in each field. The five fields of the SIMPLE_ANN annotation will be
-placed in the 1st, 2nd, 4th, 7th, and 9th column of the ANN record
-
-```
-before:
-
-chr17  41258467  del_5  ATATACCTTTTGGTTATATCATTCTTACATAAAGGACACTGTGAAGGCCCTTTCTTCTGGTTGAGAAGTTTCAGCATGCAAAATCTATA  A  .  .  END=41258555;SVTYPE=DEL;SVLEN=-88;UPSTREAM_PAIR_COUNT=0;DOWNSTREAM_PAIR_COUNT=0;PAIR_COUNT=0;ANN=A|exon_loss_variant&splice_acceptor_variant&splice_donor_variant&splice_region_variant&splice_region_variant&splice_region_variant&splice_region_variant&intron_variant&intron_variant|HIGH|BRCA1|BRCA1|transcript|NM_007294.3|Coding|4/23|c.135-5_212+5delTATAGATTTTGCATGCTGAAACTTCTCAACCAGAAGAAAGGGCCTTCACAGTGTCCTTTATGTAAGAATGATATAACCAAAAGGTATA||||||
-
-after:
-
-chr17  41258467  del_5  ATATACCTTTTGGTTATATCATTCTTACATAAAGGACACTGTGAAGGCCCTTTCTTCTGGTTGAGAAGTTTCAGCATGCAAAATCTATA  A  .  .  END=41258555;SVTYPE=DEL;SVLEN=-88;UPSTREAM_PAIR_COUNT=0;DOWNSTREAM_PAIR_COUNT=0;PAIR_COUNT=0;ANN=DEL|EXON_DEL||BRCA1|||NM_007294.3||Exon5del|||||||
 ```
