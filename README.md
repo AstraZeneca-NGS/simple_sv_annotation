@@ -35,11 +35,17 @@ vcf FILE - vcf file annotated with snpEff v4.1g+
 **Optional arguments**
 
 ```
---output/-o   FILE - Output file name. Default: <invcf>.simpleann.vcf
+--output/-o   FILE - Output file name. Use dash (-) for stdout. Default: <invcf>.simpleann.vcf.
 --exonNums/-e FILE - List of custom exon numbers (see Alternate Exon Numbers)
 --gene_list/-g FILE - List of genes to prioritise on
 --known_fusion_pairs/-k FILE - Comma delimited file with a gene pair on each row representing known fusion pairs
 ```
+
+## Licence
+
+This program is distributed under the MIT licence save for the exception below.
+
+The file ```fusion_pairs.txt``` provided here is an extract of the file at https://github.com/ndaniel/fusioncatcher/blob/master/bin/generate_known.py and is redistributed here under the GNU GPLv3. 
 
 ## Alternate Exon Numbers
 
@@ -122,7 +128,7 @@ specifications are followed and each SV is described with standard SV INFO field
 
 ## Example Output
 
-There are two different outputs that ```simple_sv_annotation.py``` can produce:
+Primary output for ```simple_sv_annotation.py```:
 
 #### 1. Add SIMPLE_ANN field
 
