@@ -156,3 +156,5 @@ after:
 
 chr17  41258467  del_5  ATATACCTTTTGGTTATATCATTCTTACATAAAGGACACTGTGAAGGCCCTTTCTTCTGGTTGAGAAGTTTCAGCATGCAAAATCTATA  A  .  .  END=41258555;SVTYPE=DEL;SVLEN=-88;UPSTREAM_PAIR_COUNT=0;DOWNSTREAM_PAIR_COUNT=0;PAIR_COUNT=0;ANN=A|exon_loss_variant&splice_acceptor_variant&splice_donor_variant&splice_region_variant&splice_region_variant&splice_region_variant&splice_region_variant&intron_variant&intron_variant|HIGH|BRCA1|BRCA1|transcript|NM_007294.3|Coding|4/23|c.135-5_212+5delTATAGATTTTGCATGCTGAAACTTCTCAACCAGAAGAAAGGGCCTTCACAGTGTCCTTTATGTAAGAATGATATAACCAAAAGGTATA||||||;SIMPLE_ANN=DEL|EXON_DEL|BRCA1|NM_007294.3|Exon5del
 ```
+
+[![DOI](https://zenodo.org/badge/40991130.svg)](https://zenodo.org/badge/latestdoi/40991130)
