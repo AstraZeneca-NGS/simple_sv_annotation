@@ -56,6 +56,10 @@ def main(vcf_in, outfile, exon_nums, args):
     #
     vcf_reader.infos['SIMPLE_ANN'] = vcf.parser._Info(id="SIMPLE_ANN", num=".", type="String", desc="Simplified human readable structural variant annotation: 'SVTYPE | ANNOTATION | GENE(s) | TRANSCRIPT | DETAIL (exon losses, KNOWN_FUSION, ON_PRIORITY_LIST, NOT_PRIORITISED) | PRIORITY (1-3) '", source=None, version=None)
     #
+    # Add an info field for highest priority (given multiple annotations per entry)
+    vcf_reader.infos['SV_HIGHEST_TIER'] = vcf.parser._Info(id="SV_HIGHEST_TIER", num=1, type="Integer", desc="Highest priority tier for the effects of a variant entry", source=None, version=None)
+    #
+
     # Add filters
     #
     vcf_reader.filters["REJECT"] = vcf.parser._Filter(id="REJECT", desc="Rejected due various criteria (missing ANN/BND, purely intergenic, small events)")
@@ -107,6 +111,7 @@ def simplify_ann(record, exon_nums, known_fusions, prioritised_genes):
     exon_losses = {}
     annotated = False
     is_intergenic = True # is intergenic or otherwise likely rubbish?
+    record.INFO['SV_HIGHEST_TIER'] = 3
     for i in record.INFO['ANN']:
         ann_a = i.split('|')
         if "exon_loss_variant" in ann_a[1]:
@@ -141,6 +146,7 @@ def simplify_ann(record, exon_nums, known_fusions, prioritised_genes):
     # REJECT purely intergenic events and other nuisance variants
     if is_intergenic:
         record.FILTER.append("REJECT")
+        del record.INFO["SV_HIGHEST_TIER"]
     return record
 
 def uniq_list(inlist):
@@ -210,6 +216,8 @@ def annotate_exon_loss(record, exon_losses, exon_nums, prioritised_genes):
         else:
             deleted_exons = "Exon"+str(min(exons))+"-"+str(max(exons))+"del"
         var_priority = "2" if gene in prioritised_genes else "3"
+        if record.INFO['SV_HIGHEST_TIER'] > int(var_priority):
+            record.INFO['SV_HIGHEST_TIER'] = int(var_priority)
         try:
             record.INFO['SIMPLE_ANN'].append("DEL|EXON_DEL|%s|%s|%s|%s" % (gene,transcript,deleted_exons,var_priority))
         except KeyError:
@@ -231,7 +239,8 @@ def annotate_other_var(record, ann_a, known_fusions, prioritised_genes):
     elif (len(genes[0]) > 0 and genes[0] in prioritised_genes) or (len(genes) > 1 and len(genes[1])>0 and genes[1] in prioritised_genes):
         var_detail = "ON_PRIORITY_LIST"
         var_priority = "2"
-
+    if record.INFO['SV_HIGHEST_TIER'] > int(var_priority):
+        record.INFO['SV_HIGHEST_TIER'] = int(var_priority)
     simple_ann = "%s|%s|%s|%s|%s|%s" % (record.INFO['SVTYPE'], ann_a[1].upper(), ann_a[3], ann_a[6], var_detail, var_priority)
     try:
         if simple_ann not in record.INFO['SIMPLE_ANN']: # avoid duplicate entries that bloat the output
