@@ -137,13 +137,14 @@ provided by snpEff. Instead an additional field called SIMPLE_ANN will be added
 to the SV call. A SIMPLE_ANN will only be added to variants that can be
 simplified, other variants are not altered.
 
-There are five fields in the SIMPLE_ANN tag separated by "```|```".
+There are six fields in the SIMPLE_ANN tag separated by "```|```".
 
 1. SV type (deletion, duplication, insertion, breakend)
 2. Annotation (fusion, exon loss, intergenic, intronic)
 3. Gene name
-4. Transcript name
-5. For exon loss variants, deleted exon numbers (Exon5del)
+4. The seventh SnpEff field (often transcript name)
+5. For exon loss variants, deleted exon numbers (Exon5del). For fusions, one of `KNOWN_FUSION`, `ON_PRIORITY_LIST` or `NOT_PRIORITISED`
+6. Priority of the event (1 highest, 3 lowest)
 
 example:
 
