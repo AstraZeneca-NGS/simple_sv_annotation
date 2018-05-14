@@ -62,7 +62,7 @@ def main(vcf_in, outfile, exon_nums, args):
 
     # Add filters
     #
-    vcf_reader.filters["REJECT"] = vcf.parser._Filter(id="REJECT", desc="Rejected due various criteria (missing ANN/BND, purely intergenic, small events)")
+    vcf_reader.filters["SV_Prioritize_PureIntergenic"] = vcf.parser._Filter(id="SV_Prioritize_PureIntergenic", desc="Rejected in SV-prioritize (missing ANN/BND, purely intergenic, a small event)")
     vcf_writer = vcf.Writer(open(outfile, 'w'), vcf_reader) if outfile !="-" else vcf.Writer(sys.stdout, vcf_reader)
     #
     # Read in gene lists
@@ -145,7 +145,7 @@ def simplify_ann(record, exon_nums, known_fusions, prioritised_genes):
         annotated = True
     # REJECT purely intergenic events and other nuisance variants
     if is_intergenic:
-        record.FILTER.append("REJECT")
+        record.FILTER.append("SV_Prioritize_PureIntergenic")
         del record.INFO["SV_HIGHEST_TIER"]
     return record
 
@@ -272,7 +272,7 @@ def create_exon_numDict(infile):
     exons = {}
     f = open(infile)
     for line in f:
-        la = line.rstrip("\n").split("\t");
+        la = line.rstrip("\n").split("\t")
         name = la[3].split("|")
         transcript = name[0]
         if transcript in exons:
