@@ -32,8 +32,8 @@ Current scheme with priority 1(high)-3(low)
 .. on gene list (2)
 .. not on gene list (3)
 - upstream or downstream of gene list genes (3)
-- other variant (REJECT)
-- missing ANN or SVTYPE: REJECT
+- other variant: "Intergenic" in FILTER
+- missing ANN or SVTYPE: "Intergenic" in FILTER
 
 See the provided README.md file for more information
 """
@@ -62,8 +62,8 @@ def main(vcf_in, outfile, exon_nums, args):
 
     # Add filters
     #
-    vcf_reader.filters["SV_Prioritize_PureIntergenic"] = vcf.parser._Filter(id="SV_Prioritize_PureIntergenic", desc="Rejected in SV-prioritize (missing ANN/BND, purely intergenic, a small event)")
-    vcf_writer = vcf.Writer(open(outfile, 'w'), vcf_reader) if outfile !="-" else vcf.Writer(sys.stdout, vcf_reader)
+    vcf_reader.filters["Intergenic"] = vcf.parser._Filter(id="Intergenic", desc="Rejected in SV-prioritize (missing ANN/BND, or purely intergenic, or a small event)")
+    vcf_writer = vcf.Writer(open(outfile, 'w'), vcf_reader) if outfile != "-" else vcf.Writer(sys.stdout, vcf_reader)
     #
     # Read in gene lists
     #
@@ -145,7 +145,7 @@ def simplify_ann(record, exon_nums, known_fusions, prioritised_genes):
         annotated = True
     # REJECT purely intergenic events and other nuisance variants
     if is_intergenic:
-        record.FILTER.append("SV_Prioritize_PureIntergenic")
+        record.FILTER.append("Intergenic")
         del record.INFO["SV_HIGHEST_TIER"]
     return record
 
