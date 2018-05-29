@@ -62,7 +62,8 @@ def main(vcf_in, outfile, exon_nums, args):
 
     # Add filters
     #
-    vcf_reader.filters["Intergenic"] = vcf.parser._Filter(id="Intergenic", desc="Rejected in SV-prioritize (missing ANN/BND, or purely intergenic, or a small event)")
+    vcf_reader.filters["MissingAnn"] = vcf.parser._Filter(id="MissingAnn", desc="Rejected in SV-prioritize (missing ANN/BND)")
+    vcf_reader.filters["Intergenic"] = vcf.parser._Filter(id="Intergenic", desc="Rejected in SV-prioritize (purely intergenic, or a small event)")
     vcf_writer = vcf.Writer(open(outfile, 'w'), vcf_reader) if outfile != "-" else vcf.Writer(sys.stdout, vcf_reader)
     #
     # Read in gene lists
@@ -79,7 +80,7 @@ def main(vcf_in, outfile, exon_nums, args):
             #any(["gene_fusion" in x for x in record.INFO['ANN']])
             vcf_writer.write_record(simplify_ann(record, exon_nums, known_fusions, prioritised_genes))
         else: 
-            record.FILTER.append("REJECT")
+            record.FILTER.append("MissingAnn")
             vcf_writer.write_record(record)
     vcf_writer.close()
 
@@ -143,7 +144,7 @@ def simplify_ann(record, exon_nums, known_fusions, prioritised_genes):
     if len(exon_losses) > 0:
         annotate_exon_loss(record, exon_losses, exon_nums, prioritised_genes)
         annotated = True
-    # REJECT purely intergenic events and other nuisance variants
+    # Add filter for purely intergenic events and other nuisance variants
     if is_intergenic:
         record.FILTER.append("Intergenic")
         del record.INFO["SV_HIGHEST_TIER"]
