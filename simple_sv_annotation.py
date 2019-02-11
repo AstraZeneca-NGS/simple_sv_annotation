@@ -68,7 +68,7 @@ def main(vcf_in, outfile, exon_nums, args):
     #
     # Read in gene lists
     #
-    known_fusions, prioritised_genes = read_gene_lists(args.known_fusion_pairs, args.gene_list)
+    known_fusions, known_promiscuous, prioritised_genes = read_gene_lists(args.known_fusion_pairs, args.known_fusion_promiscuous, args.gene_list)
     #
     #
     #
@@ -78,14 +78,15 @@ def main(vcf_in, outfile, exon_nums, args):
 
         if 'SVTYPE' in record.INFO and 'ANN' in record.INFO:
             #any(["gene_fusion" in x for x in record.INFO['ANN']])
-            vcf_writer.write_record(simplify_ann(record, exon_nums, known_fusions, prioritised_genes))
+            vcf_writer.write_record(simplify_ann(record, exon_nums, known_fusions, known_promiscuous, prioritised_genes))
         else: 
             record.FILTER.append("MissingAnn")
             vcf_writer.write_record(record)
     vcf_writer.close()
 
-def read_gene_lists(known_fusion_pairs, gene_list):
-    kfp = []
+def read_gene_lists(known_fusion_pairs, known_fusion_promiscuous, known_fusion_tails, gene_list):
+    known_pairs = []
+    known_promiscuous = []
     gl = []
     if known_fusion_pairs and os.path.isfile(known_fusion_pairs):
         with open(known_fusion_pairs, 'r') as myfhandle:
@@ -93,15 +94,21 @@ def read_gene_lists(known_fusion_pairs, gene_list):
                 genes = line.strip().split(",")
                 if len(genes) == 2 and len(genes[0]) > 0 and len(genes[1]) > 0:
                     kfp.append([genes[0].strip(), genes[1].strip()])
+    if known_fusion_promiscuous and os.path.isfile(known_fusion_promiscuous):
+        with open(known_fusion_promiscuous, 'r') as myfhandle:
+            for line in myfhandle:
+                gene = line.strip()
+                known_promiscuous.append(gene)
+
     if gene_list and os.path.isfile(gene_list):
         with open(gene_list, 'r') as myghandle:
             for line in myghandle:
                 gene = line.strip()
                 if len(gene) > 0:
                     gl.append(gene)
-    return kfp, gl
+    return known_pairs, known_promiscuous, gl
 
-def simplify_ann(record, exon_nums, known_fusions, prioritised_genes):
+def simplify_ann(record, exon_nums, known_fusions, known_promiscuous, prioritised_genes):
     """Find any annotations that can be simplified and call the method
     to annotate it.
     """
@@ -125,8 +132,7 @@ def simplify_ann(record, exon_nums, known_fusions, prioritised_genes):
             # This could be 'gene_fusion', 'bidirectional_gene_fusion' but not 'feature_fusion'
             # 'gene_fusion' could lead to a coding fusion whereas 
             # 'bidirectional_gene_fusion' is likely non-coding (opposing frames, _if_ inference correct)
-            annotate_other_var(record, ann_a, known_fusions, prioritised_genes)
-            annotated = True
+            annotate_other_var(record, ann_a, known_fusions, known_promiscuous, prioritised_genes)
             is_intergenic = False
         elif "downstream" in ann_a[1] or "upstream" in ann_a[1]:
             # get SVs affecting up/downstream regions of prioritised genes
@@ -139,7 +145,6 @@ def simplify_ann(record, exon_nums, known_fusions, prioritised_genes):
                         record.INFO['SIMPLE_ANN'].append(simple_ann)
                 except KeyError:
                     record.INFO['SIMPLE_ANN'] = [simple_ann]
-                annotated = True
                 is_intergenic = False
     if len(exon_losses) > 0:
         annotate_exon_loss(record, exon_losses, exon_nums, prioritised_genes)
@@ -224,7 +229,7 @@ def annotate_exon_loss(record, exon_losses, exon_nums, prioritised_genes):
         except KeyError:
             record.INFO['SIMPLE_ANN'] = ["DEL|EXON_DEL|%s|%s|%s|%s" % (gene,transcript,deleted_exons,var_priority)]
 
-def annotate_other_var(record, ann_a, known_fusions, prioritised_genes):
+def annotate_other_var(record, ann_a, known_fusions, known_promiscuous, prioritised_genes):
     """Create a simplified version of the annotation field for non-whole exon loss events
     that are likely to lead to fusions
     Regardless of sv type, the simple annotation for an intronic variant
@@ -234,7 +239,8 @@ def annotate_other_var(record, ann_a, known_fusions, prioritised_genes):
     var_detail = "NOT_PRIORITISED"
     genes = ann_a[3].strip().split("&")
 
-    if len(genes) > 1 and ([genes[0],genes[1]] in known_fusions or [genes[1],genes[0]] in known_fusions):
+    if len(genes) > 1 and ([genes[0], genes[1]] in known_fusions or [genes[1], genes[0]] in known_fusions
+                           or genes[0] in known_promiscuous or genes[1] in known_promiscuous):
         var_priority = "1"
         var_detail = "KNOWN_FUSION"
     elif (len(genes[0]) > 0 and genes[0] in prioritised_genes) or (len(genes) > 1 and len(genes[1])>0 and genes[1] in prioritised_genes):
@@ -288,6 +294,7 @@ if __name__ == "__main__":
     parser.add_argument('vcf', help='VCF file with snpEff annotations')
     parser.add_argument('--gene_list', '-g', help='File with names of genes (one per line) for prioritisation', required=False, default=None)
     parser.add_argument('--known_fusion_pairs', '-k', help='File with known fusion gene pairs, one pair per line delimited by comma', required=False, default=None)
+    parser.add_argument('--known_fusion_promiscuous', '-p', help='File with known promiscuous fusion genes, one gene name per line', required=False, default=None)
     parser.add_argument('--output', '-o', help='Output file name (must not exist). Does not support bgzipped output. Use "-" for stdout. [<invcf>.simpleann.vcf]', required=False)
     parser.add_argument('--exonNums', '-e', help='List of custom exon numbers. A transcript listed in this file will be annotated with the numbers found in this file, not the numbers found in the snpEff result')
     #parser_excl = parser.add_mutually_exclusive_group(required=False)
