@@ -50,7 +50,7 @@ def main(vcf_in, outfile, exon_nums, args):
     the outfile for writing, and iterates through the records to identify
     records that are candidates for adding the simple annotation
     """
-    vcf_reader = vcf.Reader(filename=vcf_in)
+    vcf_reader = vcf.Reader(filename=vcf_in) if vcf_in != "-" else vcf.Reader(sys.stdin)
     #
     # add a new info field into the header of the output file
     #
@@ -84,7 +84,7 @@ def main(vcf_in, outfile, exon_nums, args):
             vcf_writer.write_record(record)
     vcf_writer.close()
 
-def read_gene_lists(known_fusion_pairs, known_fusion_promiscuous, known_fusion_tails, gene_list):
+def read_gene_lists(known_fusion_pairs, known_fusion_promiscuous, gene_list):
     known_pairs = []
     known_promiscuous = []
     gl = []
@@ -93,7 +93,7 @@ def read_gene_lists(known_fusion_pairs, known_fusion_promiscuous, known_fusion_t
             for line in myfhandle:
                 genes = line.strip().split(",")
                 if len(genes) == 2 and len(genes[0]) > 0 and len(genes[1]) > 0:
-                    kfp.append([genes[0].strip(), genes[1].strip()])
+                    known_pairs.append([genes[0].strip(), genes[1].strip()])
     if known_fusion_promiscuous and os.path.isfile(known_fusion_promiscuous):
         with open(known_fusion_promiscuous, 'r') as myfhandle:
             for line in myfhandle:
@@ -115,9 +115,8 @@ def simplify_ann(record, exon_nums, known_fusions, known_promiscuous, prioritise
     # marching order is: 'exon_loss_variant', fusions, others (reject)
 
     # to-do: CNV and INS?
-    
+
     exon_losses = {}
-    annotated = False
     is_intergenic = True # is intergenic or otherwise likely rubbish?
     record.INFO['SV_HIGHEST_TIER'] = 3
     for i in record.INFO['ANN']:
@@ -148,7 +147,6 @@ def simplify_ann(record, exon_nums, known_fusions, known_promiscuous, prioritise
                 is_intergenic = False
     if len(exon_losses) > 0:
         annotate_exon_loss(record, exon_losses, exon_nums, prioritised_genes)
-        annotated = True
     # Add filter for purely intergenic events and other nuisance variants
     if is_intergenic:
         record.FILTER.append("Intergenic")
