@@ -117,6 +117,7 @@ def simplify_ann(record, exon_nums, known_fusions, known_promiscuous, prioritise
     # to-do: CNV and INS?
 
     exon_losses = {}
+    annotated = False
     is_intergenic = True # is intergenic or otherwise likely rubbish?
     record.INFO['SV_HIGHEST_TIER'] = 3
     for i in record.INFO['ANN']:
@@ -132,6 +133,7 @@ def simplify_ann(record, exon_nums, known_fusions, known_promiscuous, prioritise
             # 'gene_fusion' could lead to a coding fusion whereas 
             # 'bidirectional_gene_fusion' is likely non-coding (opposing frames, _if_ inference correct)
             annotate_other_var(record, ann_a, known_fusions, known_promiscuous, prioritised_genes)
+            annotated = True
             is_intergenic = False
         elif "downstream" in ann_a[1] or "upstream" in ann_a[1]:
             # get SVs affecting up/downstream regions of prioritised genes
@@ -144,9 +146,11 @@ def simplify_ann(record, exon_nums, known_fusions, known_promiscuous, prioritise
                         record.INFO['SIMPLE_ANN'].append(simple_ann)
                 except KeyError:
                     record.INFO['SIMPLE_ANN'] = [simple_ann]
+                annotated = True
                 is_intergenic = False
     if len(exon_losses) > 0:
         annotate_exon_loss(record, exon_losses, exon_nums, prioritised_genes)
+        annotated = True
     # Add filter for purely intergenic events and other nuisance variants
     if is_intergenic:
         record.FILTER.append("Intergenic")
