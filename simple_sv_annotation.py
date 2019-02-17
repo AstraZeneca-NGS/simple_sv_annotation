@@ -128,7 +128,7 @@ def simplify_ann(record, exon_nums, known_fusions, known_promiscuous, prioritise
                 exon_losses[ann_a[6]].append(i)
             except KeyError:
                 exon_losses[ann_a[6]] = [i]
-        elif "gene_fusion" in ann_a[1] or "downstream" in ann_a[1] or "upstream" in ann_a[1]: 
+        elif "gene_fusion" in ann_a[1]: 
             # This could be 'gene_fusion', 'bidirectional_gene_fusion' but not 'feature_fusion'
             # 'gene_fusion' could lead to a coding fusion whereas 
             # 'bidirectional_gene_fusion' is likely non-coding (opposing frames, _if_ inference correct)
